@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera Calibration Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #video {
+      width: 100%;
+      max-width: 600px;
+      border: 1px solid #ddd;
+    }
+    #capture {
+      margin-top: 10px;
+    }
+    #result {
+      margin-top: 20px;
+      max-width: 600px;
+      border: 1px solid #ddd;
+    }
+    canvas {
+      display: none;
+    }
+    .controls {
+      margin-top: 20px;
+    }
+    .controls input,
+    .controls select {
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Camera Calibration Example</h1>
+  <video id="video" autoplay></video>
+  <button id="capture">Capture</button>
+
+  <div class="controls">
+    <label for="brightness">Brightness:</label>
+    <input type="range" id="brightness" min="0" max="2" step="0.1" value="1">
+    <span id="brightnessValue">1</span>
+    <br>
+    <label for="contrast">Contrast:</label>
+    <input type="range" id="contrast" min="0" max="2" step="0.1" value="1">
+    <span id="contrastValue">1</span>
+    <br>
+    <label for="aspectRatio">Aspect Ratio:</label>
+    <select id="aspectRatio">
+      <option value="9/16">9:16</option>
+      <option value="4/3">4:3</option>
+      <option value="1/1">1:1</option>
+    </select>
+    <br>
+    <label for="zoom">Zoom:</label>
+    <input type="range" id="zoom" min="1" max="2" step="0.1" value="1">
+    <span id="zoomValue">1</span>
+  </div>
+
+  <img id="result" alt="Captured Image" />
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const result = document.getElementById('result');
+    const captureButton = document.getElementById('capture');
+    const context = canvas.getContext('2d');
+
+    const brightnessInput = document.getElementById('brightness');
+    const contrastInput = document.getElementById('contrast');
+    const aspectRatioSelect = document.getElementById('aspectRatio');
+    const zoomInput = document.getElementById('zoom');
+
+    const brightnessValue = document.getElementById('brightnessValue');
+    const contrastValue = document.getElementById('contrastValue');
+    const zoomValue = document.getElementById('zoomValue');
+
+    brightnessInput.addEventListener('input', () => brightnessValue.textContent = brightnessInput.value);
+    contrastInput.addEventListener('input', () => contrastValue.textContent = contrastInput.value);
+    zoomInput.addEventListener('input', () => zoomValue.textContent = zoomInput.value);
+
+    const constraints = {
+      video: {
+        facingMode: 'user', // Front camera
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 }
+      }
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(error => {
+        console.error('Error accessing camera:', error);
+      });
+
+    function normalizeImage(imageData, brightness, contrast, aspectRatio, zoom) {
+      const width = imageData.width;
+      const height = imageData.height;
+      const data = imageData.data;
+
+      // Adjust brightness and contrast
+      for (let i = 0; i < data.length; i += 4) {
+        // Apply brightness
+        data[i] = data[i] * brightness;     // Red
+        data[i + 1] = data[i + 1] * brightness; // Green
+        data[i + 2] = data[i + 2] * brightness; // Blue
+
+        // Apply contrast (simple formula)
+        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        data[i] = factor * (data[i] - 128) + 128;     // Red
+        data[i + 1] = factor * (data[i + 1] - 128) + 128; // Green
+        data[i + 2] = factor * (data[i + 2] - 128) + 128; // Blue
+      }
+
+      // Adjust aspect ratio
+      let canvasWidth, canvasHeight;
+      if (aspectRatio === '9/16') {
+        canvasWidth = height;
+        canvasHeight = (height * 16) / 9;
+      } else if (aspectRatio === '4/3') {
+        canvasWidth = width;
+        canvasHeight = (width * 3) / 4;
+      } else {
+        canvasWidth = width;
+        canvasHeight = width; // 1:1 aspect ratio
+      }
+
+      // Adjust canvas size and apply zoom
+      canvas.width = canvasWidth * zoom;
+      canvas.height = canvasHeight * zoom;
+
+      return imageData;
+    }
+
+    captureButton.addEventListener('click', () => {
+      const aspectRatio = aspectRatioSelect.value;
+      const brightness = brightnessInput.value;
+      const contrast = contrastInput.value;
+      const zoom = zoomInput.value;
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Get the image data from the canvas
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+      // Normalize the image
+      const normalizedData = normalizeImage(imageData, brightness, contrast, aspectRatio, zoom);
+
+      // Clear the canvas and draw the adjusted image
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.putImageData(normalizedData, 0, 0);
+
+      // Display the normalized image
+      result.src = canvas.toDataURL('image/png');
+    });
+  </script>
+</body>
+</html>
